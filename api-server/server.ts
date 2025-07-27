@@ -11,12 +11,29 @@ config();
 const fastify = Fastify({ logger: true });
 
 // Initialize Firebase Admin (uses Application Default Credentials in GCP)
-const app = initializeApp();
-const db = getFirestore(app);
+let app;
+let db;
+
+try {
+  app = initializeApp();
+  db = getFirestore(app);
+  log('✅ Firebase initialized successfully');
+} catch (error) {
+  log('❌ Firebase initialization failed:', error);
+  // For now, continue without Firebase to allow basic health checks
+}
 
 // Initialize Pub/Sub
-const pubsub = new PubSub();
-const scanJobsTopic = pubsub.topic('scan-jobs');
+let pubsub;
+let scanJobsTopic;
+
+try {
+  pubsub = new PubSub();
+  scanJobsTopic = pubsub.topic('scan-jobs');
+  log('✅ Pub/Sub initialized successfully');
+} catch (error) {
+  log('❌ Pub/Sub initialization failed:', error);
+}
 
 function log(...args: any[]) {
   const timestamp = new Date().toISOString();
@@ -63,6 +80,11 @@ fastify.get('/health', async (request, reply) => {
 // Create scan endpoint
 fastify.post('/scan', async (request, reply) => {
   try {
+    if (!db || !scanJobsTopic) {
+      reply.status(503);
+      return { error: 'Service not ready - database or messaging not initialized' };
+    }
+
     const { companyName, domain: rawDomain, tags } = request.body as { 
       companyName: string; 
       domain: string; 
